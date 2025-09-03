@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import axios from "axios";
 import { toast } from "react-hot-toast";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,26 +19,18 @@ export default function LoginPage() {
   });
 
   const [loading, setLoading] = useState(false);
-  const [isSignup, setIsSignup] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const endpoint = isSignup ? "/api/users/signup" : "/api/users/login";
-      const response = await axios.post(endpoint, user);
+      const response = await axios.post("/api/users/login", user);
 
-      toast.success(
-        isSignup ? "Signup Success 🎉 Please login!" : "Login Success ✅"
-      );
+      toast.success("Login Success ✅");
 
-      if (!isSignup) {
-        const userId = response.data.user?.id;
-        router.push("/travel");
-      } else {
-        setIsSignup(false); // after signup, go back to login
-      }
+      const userId = response.data.user?.id;
+      router.push("/travel"); // redirect after login
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Something went wrong ❌");
     } finally {
@@ -56,10 +49,10 @@ export default function LoginPage() {
         <Card className="backdrop-blur-lg bg-white/10 border border-gray-700 shadow-xl rounded-2xl">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-bold text-white">
-              {isSignup ? "Sign Up ✨" : "Login 👋"}
+              Login 👋
             </CardTitle>
             <p className="text-gray-300 text-sm mt-1">
-              {isSignup ? "Create an account" : "Access your account"}
+              Access your account
             </p>
           </CardHeader>
 
@@ -103,26 +96,19 @@ export default function LoginPage() {
                   disabled={loading}
                   className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-semibold"
                 >
-                  {loading
-                    ? isSignup
-                      ? "Signing up..."
-                      : "Logging in..."
-                    : isSignup
-                    ? "Sign Up"
-                    : "Login"}
+                  {loading ? "Logging in..." : "Login"}
                 </Button>
               </motion.div>
             </form>
 
             <p className="text-center text-gray-400 text-sm mt-6">
-              {isSignup ? "Already have an account?" : "New user?"}{" "}
-              <button
-                type="button"
-                onClick={() => setIsSignup(!isSignup)}
+              New user?{" "}
+              <Link
+                href="/signup"
                 className="text-purple-400 hover:underline"
               >
-                {isSignup ? "Login here" : "Sign up here"}
-              </button>
+                Sign up here
+              </Link>
             </p>
           </CardContent>
         </Card>

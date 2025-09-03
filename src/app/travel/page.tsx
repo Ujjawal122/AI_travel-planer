@@ -1,3 +1,4 @@
+// app/travel/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -5,18 +6,27 @@ import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
+import { SelectTravelList, SelectBudgetOptions } from "@/lib/travel-options";
 
 export default function TravelPage() {
   const [destination, setDestination] = useState("");
   const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [days, setDays] = useState("");
-  const [budget, setBudget] = useState("");
+  const [days, setDays] = useState("3");
+  const [traveler, setTraveler] = useState<any>(SelectTravelList[0]);
+  const [budget, setBudget] = useState<any>(SelectBudgetOptions[1]);
   const [interests, setInterests] = useState("");
-  const [plan, setPlan] = useState("");
+  const [plan, setPlan] = useState<any>(null);
   const [place, setPlace] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  // 🔹 Fetch city/place suggestions from OpenStreetMap
+  // 🔹 Fetch city/place suggestions (OpenStreetMap Nominatim)
   const fetchSuggestions = async (value: string) => {
     setDestination(value);
     if (value.length < 3) {
@@ -35,45 +45,43 @@ export default function TravelPage() {
     }
   };
 
-  // 🔹 When user clicks suggestion
   const handleSelectSuggestion = (s: any) => {
     setDestination(s.display_name);
     setSuggestions([]);
   };
 
-  // 🔹 Generate Travel Plan
+  // 🔹 Generate Travel Plan (AI + Unsplash)
   const handleGenerate = async () => {
     setLoading(true);
-    setPlan("");
+    setPlan(null);
     setPlace(null);
 
     try {
-      // Step 1: Fetch place details & images
       const placeRes = await axios.post("/api/place", { query: destination });
       setPlace(placeRes.data);
 
-      // Step 2: Generate AI plan
       const res = await axios.post("/api/users/ai-travel", {
         destination,
-        days,
-        budget,
+        totalDays: days,
+        traveler: traveler.people,
+        budget: budget.title,
         interests,
       });
 
-      setPlan(res.data.plan);
+      setPlan((res.data.plan)); // expecting JSON
     } catch (error) {
       console.error("Error:", error);
-      setPlan("⚠️ Something went wrong. Please try again.");
+      setPlan({ error: "⚠️ Something went wrong. Please try again." });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-black text-white p-6">
+    <div className="min-h-screen flex flex-col items-center bg-black text-white p-6">
       <h1 className="text-4xl font-bold mb-6">🌍 AI Travel Planner</h1>
 
-      <div className="w-full max-w-lg space-y-4 relative">
+      <div className="w-full max-w-2xl space-y-4 relative">
         {/* Destination Input with Suggestions */}
         <Input
           placeholder="Destination (e.g., Paris)"
@@ -94,16 +102,63 @@ export default function TravelPage() {
           </div>
         )}
 
-        <Input
-          placeholder="Number of days"
-          value={days}
-          onChange={(e) => setDays(e.target.value)}
-        />
-        <Input
-          placeholder="Budget (e.g., $1000)"
-          value={budget}
-          onChange={(e) => setBudget(e.target.value)}
-        />
+        {/* Days Selection */}
+        <div className="flex gap-2 items-center">
+          <label className="text-gray-400 w-28">Days</label>
+          <Input
+            type="number"
+            min="1"
+            value={days}
+            onChange={(e) => setDays(e.target.value)}
+          />
+        </div>
+
+        {/* Traveler Type */}
+        <div>
+          <p className="text-gray-400 mb-2">Who’s traveling?</p>
+          <div className="grid grid-cols-2 gap-2">
+            {SelectTravelList.map((t) => (
+              <Card
+                key={t.id}
+                onClick={() => setTraveler(t)}
+                className={`cursor-pointer border ${
+                  traveler.id === t.id ? "border-purple-500" : "border-gray-700"
+                } bg-gray-900 hover:bg-gray-800`}
+              >
+                <CardContent className="flex items-center gap-2 p-3">
+                  <t.icon className="w-6 h-6 text-purple-400" />
+                  <div>
+                    <p className="font-bold">{t.title}</p>
+                    <p className="text-xs text-gray-400">{t.people}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {/* Budget Options */}
+        <div>
+          <p className="text-gray-400 mb-2">Budget</p>
+          <div className="grid grid-cols-3 gap-2">
+            {SelectBudgetOptions.map((b) => (
+              <Card
+                key={b.id}
+                onClick={() => setBudget(b)}
+                className={`cursor-pointer border ${
+                  budget.id === b.id ? "border-purple-500" : "border-gray-700"
+                } bg-gray-900 hover:bg-gray-800`}
+              >
+                <CardContent className="flex flex-col items-center p-3">
+                  <b.icon className="w-6 h-6 text-yellow-400" />
+                  <p className="font-bold">{b.title}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+
+        {/* Interests */}
         <Textarea
           placeholder="Interests (e.g., museums, food, adventure)"
           value={interests}
@@ -113,7 +168,7 @@ export default function TravelPage() {
         <Button
           onClick={handleGenerate}
           disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700"
+          className="w-full bg-purple-600 hover:bg-purple-700"
         >
           {loading ? "Generating..." : "Generate Travel Plan"}
         </Button>
@@ -140,11 +195,43 @@ export default function TravelPage() {
       )}
 
       {/* AI Travel Plan */}
-      {plan && (
-        <div className="mt-8 w-full max-w-2xl bg-gray-900 p-6 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-bold mb-3">✨ Your AI Travel Plan</h2>
-          <pre className="whitespace-pre-wrap text-gray-300">{plan}</pre>
+      {plan && !plan.error && (
+        <div className="mt-8 w-full max-w-3xl space-y-6">
+          {plan.days?.map((day: any, i: number) => (
+            <Card key={i} className="bg-gray-900 border-gray-700">
+              <CardHeader>
+                <CardTitle>Day {i + 1}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {day.itinerary.map((place: any, j: number) => (
+                  <div
+                    key={j}
+                    className="p-3 rounded-lg bg-gray-800 flex gap-4"
+                  >
+                    <img
+                      src={place.image}
+                      alt={place.name}
+                      className="w-28 h-20 rounded-lg object-cover"
+                    />
+                    <div>
+                      <h3 className="font-bold">{place.name}</h3>
+                      <p className="text-sm text-gray-400">
+                        {place.description}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        ⏰ {place.time} | 💵 {place.price}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ))}
         </div>
+      )}
+
+      {plan?.error && (
+        <p className="text-red-400 mt-6">{plan.error}</p>
       )}
     </div>
   );
