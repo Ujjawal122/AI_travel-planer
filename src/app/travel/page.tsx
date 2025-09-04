@@ -57,10 +57,12 @@ export default function TravelPage() {
     setPlace(null);
 
     try {
+      // 1️⃣ Get main destination info with Unsplash images
       const placeRes = await axios.post("/api/place", { query: destination });
       setPlace(placeRes.data);
 
-      const res = await axios.post("/api/users/ai-travel", {
+      // 2️⃣ Get AI-generated plan
+      const res = await axios.post("/api/ai-planer", {
         destination,
         totalDays: days,
         traveler: traveler.people,
@@ -68,7 +70,25 @@ export default function TravelPage() {
         interests,
       });
 
-      setPlan((res.data.plan)); // expecting JSON
+      let aiPlan = res.data.plan;
+
+      // 3️⃣ Fetch Unsplash images for each itinerary spot in parallel
+      for (let day of aiPlan.days) {
+        await Promise.all(
+          day.itinerary.map(async (spot: any) => {
+            try {
+              const imgRes = await axios.post("/api/place", { query: spot.name });
+              if (imgRes.data?.images?.length > 0) {
+                spot.image = imgRes.data.images[0].url; // pick first Unsplash image
+              }
+            } catch (err) {
+              console.error("Unsplash fetch failed:", err);
+            }
+          })
+        );
+      }
+
+      setPlan(aiPlan); // ✅ Save enriched plan with images
     } catch (error) {
       console.error("Error:", error);
       setPlan({ error: "⚠️ Something went wrong. Please try again." });
@@ -79,7 +99,7 @@ export default function TravelPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center bg-black text-white p-6">
-      <h1 className="text-4xl font-bold mb-6">🌍 AI Travel Planner</h1>
+      <h1 className="text-4xl font-bold mb-6">🌍 Guptaji AI Planner</h1>
 
       <div className="w-full max-w-2xl space-y-4 relative">
         {/* Destination Input with Suggestions */}
@@ -203,23 +223,23 @@ export default function TravelPage() {
                 <CardTitle>Day {i + 1}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {day.itinerary.map((place: any, j: number) => (
+                {day.itinerary.map((spot: any, j: number) => (
                   <div
                     key={j}
                     className="p-3 rounded-lg bg-gray-800 flex gap-4"
                   >
                     <img
-                      src={place.image}
-                      alt={place.name}
+                      src={spot.image}
+                      alt={spot.name}
                       className="w-28 h-20 rounded-lg object-cover"
                     />
                     <div>
-                      <h3 className="font-bold">{place.name}</h3>
+                      <h3 className="font-bold">{spot.name}</h3>
                       <p className="text-sm text-gray-400">
-                        {place.description}
+                        {spot.description}
                       </p>
                       <p className="text-xs text-gray-500">
-                        ⏰ {place.time} | 💵 {place.price}
+                        ⏰ {spot.time} | 💵 {spot.price}
                       </p>
                     </div>
                   </div>

@@ -3,7 +3,7 @@ import OpenAI from "openai";
 
 const openai = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPEN_AI,
+  apiKey: process.env.OPEN_AI, // store in .env.local
   defaultHeaders: {
     "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
     "X-Title": process.env.NEXT_PUBLIC_SITE_NAME || "AI Travel Planner",
@@ -25,9 +25,9 @@ Generate a JSON ONLY travel plan for:
 - Budget: ${budget}
 - Interests: ${interests}
 
-⚠️ IMPORTANT: 
-- Reply with ONLY valid JSON. 
-- Do NOT include markdown, explanations, or extra text. 
+⚠️ IMPORTANT:
+- Reply with ONLY valid JSON.
+- Do NOT include markdown, explanations, or extra text.
 - Use this structure:
 
 {
@@ -55,12 +55,12 @@ Generate a JSON ONLY travel plan for:
 
     let aiMessage = completion.choices[0]?.message?.content || "{}";
 
-    // ✅ Try parsing safely
+    // ✅ Ensure it's valid JSON
     let parsedPlan;
     try {
       parsedPlan = JSON.parse(aiMessage);
     } catch (err) {
-      console.error("JSON parse error, raw message:", aiMessage);
+      console.error("JSON parse error:", aiMessage);
       return NextResponse.json(
         { error: "AI did not return valid JSON" },
         { status: 500 }

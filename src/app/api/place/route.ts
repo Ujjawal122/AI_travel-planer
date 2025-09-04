@@ -7,29 +7,46 @@ export async function POST(req: Request) {
   try {
     const { query } = await req.json();
 
-    // 🔹 Step 1: Get location from OpenStreetMap
+    if (!query) {
+      return NextResponse.json({ error: "Query is required" }, { status: 400 });
+    }
+
+    // 🔹 Step 1: Search location in OpenStreetMap
     const osmRes = await axios.get(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-        query
-      )}`
+      `https://nominatim.openstreetmap.org/search`,
+      {
+        params: {
+          format: "json",
+          q: query,
+          limit: 1,
+        },
+      }
     );
 
-    if (osmRes.data.length === 0) {
+    if (!osmRes.data || osmRes.data.length === 0) {
+      
       return NextResponse.json({ error: "No location found" }, { status: 404 });
     }
 
-    const place = osmRes.data[0]; // take first match
+    const place = osmRes.data[0];
 
-    // 🔹 Step 2: Get images from Unsplash
+    // 🔹 Step 2: Fetch images from Unsplash
     const unsplashRes = await axios.get(
-      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(
-        query
-      )}&client_id=${UNSPLASH_ACCESS_KEY}&per_page=3`
+      `https://api.unsplash.com/search/photos`,
+      {
+        params: {
+          query,
+          per_page: 3,
+        },
+        headers: {
+          Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}`,
+        },
+      }
     );
 
     const images = unsplashRes.data.results.map((img: any) => ({
       url: img.urls.regular,
-      alt: img.alt_description,
+      alt: img.alt_description || "Travel Image",
     }));
 
     return NextResponse.json({
