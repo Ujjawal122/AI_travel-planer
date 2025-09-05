@@ -1,8 +1,9 @@
-// app/travel/page.tsx
 "use client";
 
 import { useState } from "react";
 import axios from "axios";
+import Cookies from "js-cookie"
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,7 +27,10 @@ export default function TravelPage() {
   const [place, setPlace] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  // 🔹 Fetch city/place suggestions (OpenStreetMap Nominatim)
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // 🔹 Fetch city/place suggestions (OpenStreetMap)
   const fetchSuggestions = async (value: string) => {
     setDestination(value);
     if (value.length < 3) {
@@ -50,18 +54,17 @@ export default function TravelPage() {
     setSuggestions([]);
   };
 
-  // 🔹 Generate Travel Plan (AI + Unsplash)
+  // 🔹 Generate Travel Plan
   const handleGenerate = async () => {
     setLoading(true);
     setPlan(null);
     setPlace(null);
+    setSaved(false);
 
     try {
-      // 1️⃣ Get main destination info with Unsplash images
       const placeRes = await axios.post("/api/place", { query: destination });
       setPlace(placeRes.data);
 
-      // 2️⃣ Get AI-generated plan
       const res = await axios.post("/api/ai-planer", {
         destination,
         totalDays: days,
@@ -72,23 +75,25 @@ export default function TravelPage() {
 
       let aiPlan = res.data.plan;
 
-      // 3️⃣ Fetch Unsplash images for each itinerary spot in parallel
-      for (let day of aiPlan.days) {
-        await Promise.all(
-          day.itinerary.map(async (spot: any) => {
-            try {
-              const imgRes = await axios.post("/api/place", { query: spot.name });
-              if (imgRes.data?.images?.length > 0) {
-                spot.image = imgRes.data.images[0].url; // pick first Unsplash image
-              }
-            } catch (err) {
-              console.error("Unsplash fetch failed:", err);
-            }
-          })
-        );
+    // Loop over each day and fetch images for each itinerary spot
+for (let day of aiPlan.days) {
+  const updatedItinerary = await Promise.all(
+    day.itinerary.map(async (spot: any) => {
+      try {
+        const imgRes = await axios.post("/api/place", { query: spot.name });
+        const imageUrl = imgRes.data?.images?.[0]?.url || "";
+        return { ...spot, image: imageUrl };
+      } catch (err) {
+        console.error(`Failed to fetch image for ${spot.name}:`, err);
+        return { ...spot, image: "" }; // fallback if fetch fails
       }
+    })
+  );
 
-      setPlan(aiPlan); // ✅ Save enriched plan with images
+  day.itinerary = updatedItinerary;
+}
+
+      setPlan(aiPlan);
     } catch (error) {
       console.error("Error:", error);
       setPlan({ error: "⚠️ Something went wrong. Please try again." });
@@ -97,8 +102,52 @@ export default function TravelPage() {
     }
   };
 
+  // 🔹 Save Trip
+  const handleSaveTrip = async () => {
+  if (!plan) {
+    alert("⚠️ No travel plan generated to save.");
+    return;
+  }
+
+  setSaving(true);
+
+  try {
+    // Axios automatically sends cookies, so no need for Authorization header
+    await axios.post("/api/users/trips", {
+      destination,
+      days: Number(days),         // must match backend schema
+      traveler: traveler.people,  // must match backend schema
+      budget: budget.title,       // must match backend schema
+      interests,
+      plan,
+    });
+
+    setSaved(true);
+    alert("✅ Trip saved successfully!");
+  } catch (error: any) {
+    console.error("Save trip failed:", error);
+    
+    if (error.response?.status === 400) {
+      alert("⚠️ Missing or invalid fields. Please check your plan and try again.");
+    } else if (error.response?.status === 401 || error.response?.status === 403) {
+      alert("⚠️ Unauthorized. Please log in again.");
+    } else {
+      alert("⚠️ Failed to save trip. Try again.");
+    }
+  } finally {
+    setSaving(false);
+  }
+};
+
   return (
     <div className="min-h-screen flex flex-col items-center bg-black text-white p-6">
+      {/* 🔹 My Trips Button (Top Left) */}
+      <div className="absolute top-4 left-4">
+        <Link href="/my-trips">
+          <Button className="bg-purple-600 hover:bg-purple-700">📌 My Trips</Button>
+        </Link>
+      </div>
+
       <h1 className="text-4xl font-bold mb-6">🌍 Guptaji AI Planner</h1>
 
       <div className="w-full max-w-2xl space-y-4 relative">
@@ -198,9 +247,7 @@ export default function TravelPage() {
       {place && (
         <div className="mt-6 w-full max-w-2xl bg-gray-900 p-6 rounded-lg shadow-lg">
           <h2 className="text-xl font-bold mb-3">{place.name}</h2>
-          <p className="text-gray-400">
-            📍 Lat: {place.lat}, Lon: {place.lon}
-          </p>
+          <p className="text-gray-400">📍 Lat: {place.lat}, Lon: {place.lon}</p>
           <div className="grid grid-cols-3 gap-3 mt-4">
             {place.images.map((img: any, i: number) => (
               <img
@@ -235,9 +282,7 @@ export default function TravelPage() {
                     />
                     <div>
                       <h3 className="font-bold">{spot.name}</h3>
-                      <p className="text-sm text-gray-400">
-                        {spot.description}
-                      </p>
+                      <p className="text-sm text-gray-400">{spot.description}</p>
                       <p className="text-xs text-gray-500">
                         ⏰ {spot.time} | 💵 {spot.price}
                       </p>
@@ -247,6 +292,15 @@ export default function TravelPage() {
               </CardContent>
             </Card>
           ))}
+
+          {/* ✅ Save Trip Button */}
+          <Button
+            onClick={handleSaveTrip}
+            disabled={saving || saved}
+            className="w-full bg-green-600 hover:bg-green-700 mt-4"
+          >
+            {saving ? "Saving..." : saved ? "✅ Trip Saved!" : "💾 Save Trip"}
+          </Button>
         </div>
       )}
 
