@@ -2,18 +2,11 @@
 
 import { useState } from "react";
 import axios from "axios";
-import Cookies from "js-cookie"
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SelectTravelList, SelectBudgetOptions } from "@/lib/travel-options";
 
 export default function TravelPage() {
@@ -26,17 +19,13 @@ export default function TravelPage() {
   const [plan, setPlan] = useState<any>(null);
   const [place, setPlace] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // 🔹 Fetch city/place suggestions (OpenStreetMap)
+  // Fetch suggestions from OpenStreetMap
   const fetchSuggestions = async (value: string) => {
     setDestination(value);
-    if (value.length < 3) {
-      setSuggestions([]);
-      return;
-    }
+    if (value.length < 3) return setSuggestions([]);
     try {
       const res = await axios.get(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
@@ -44,8 +33,8 @@ export default function TravelPage() {
         )}&limit=5`
       );
       setSuggestions(res.data);
-    } catch (error) {
-      console.error("Error fetching suggestions:", error);
+    } catch (err) {
+      console.error("Error fetching suggestions:", err);
     }
   };
 
@@ -54,7 +43,7 @@ export default function TravelPage() {
     setSuggestions([]);
   };
 
-  // 🔹 Generate Travel Plan
+  // Generate AI travel plan
   const handleGenerate = async () => {
     setLoading(true);
     setPlan(null);
@@ -62,9 +51,11 @@ export default function TravelPage() {
     setSaved(false);
 
     try {
+      // Get main place info
       const placeRes = await axios.post("/api/place", { query: destination });
       setPlace(placeRes.data);
 
+      // Get AI-generated travel plan
       const res = await axios.post("/api/ai-planer", {
         destination,
         totalDays: days,
@@ -73,76 +64,59 @@ export default function TravelPage() {
         interests,
       });
 
-      let aiPlan = res.data.plan;
+      const aiPlan = res.data.plan;
 
-    // Loop over each day and fetch images for each itinerary spot
-  for (let day of aiPlan.days) {
-        await Promise.all(
-          day.itinerary.map(async (spot: any) => {
-            try {
-              const imgRes = await axios.post("/api/place", { query: spot.name });
-              if (imgRes.data?.images?.length > 0) {
-                spot.image = imgRes.data.images[0].url;
-              }
-            } catch (err) {
-              console.error("Unsplash fetch failed:", err);
-            }
-          })
-        );
-      }
-
-
-
+      // Remove spot images, only keep info
+      aiPlan.days.forEach((day: any) => {
+        day.itinerary = day.itinerary.map((spot: any) => ({
+          name: spot.name,
+          description: spot.description,
+          time: spot.time,
+          price: spot.price,
+        }));
+      });
 
       setPlan(aiPlan);
-    } catch (error) {
-      console.error("Error:", error);
+    } catch (err) {
+      console.error("Error generating plan:", err);
       setPlan({ error: "⚠️ Something went wrong. Please try again." });
     } finally {
       setLoading(false);
     }
   };
 
-  // 🔹 Save Trip
+  // Save trip
   const handleSaveTrip = async () => {
-  if (!plan) {
-    alert("⚠️ No travel plan generated to save.");
-    return;
-  }
-
-  setSaving(true);
-
-  try {
-    // Axios automatically sends cookies, so no need for Authorization header
-    await axios.post("/api/users/trips", {
-      destination,
-      days: Number(days),         // must match backend schema
-      traveler: traveler.people,  // must match backend schema
-      budget: budget.title,       // must match backend schema
-      interests,
-      plan,
-    });
-
-    setSaved(true);
-    alert("✅ Trip saved successfully!");
-  } catch (error: any) {
-    console.error("Save trip failed:", error);
-    
-    if (error.response?.status === 400) {
-      alert("⚠️ Missing or invalid fields. Please check your plan and try again.");
-    } else if (error.response?.status === 401 || error.response?.status === 403) {
-      alert("⚠️ Unauthorized. Please log in again.");
-    } else {
-      alert("⚠️ Failed to save trip. Try again.");
+    if (!plan) {
+      alert("⚠️ No travel plan generated to save.");
+      return;
     }
-  } finally {
-    setSaving(false);
-  }
-};
+    setSaving(true);
+    try {
+      await axios.post("/api/users/trips", {
+        destination,
+        days: Number(days),
+        traveler: traveler.people,
+        budget: budget.title,
+        interests,
+        plan,
+      });
+      setSaved(true);
+      alert("✅ Trip saved successfully!");
+    } catch (err: any) {
+      console.error("Save trip failed:", err);
+      const status = err.response?.status;
+      if (status === 400) alert("⚠️ Missing or invalid fields.");
+      else if (status === 401 || status === 403) alert("⚠️ Unauthorized. Please log in.");
+      else alert("⚠️ Failed to save trip. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center bg-black text-white p-6">
-      {/* 🔹 My Trips Button (Top Left) */}
+      {/* My Trips Button */}
       <div className="absolute top-4 left-4">
         <Link href="/my-trips">
           <Button className="bg-purple-600 hover:bg-purple-700">📌 My Trips</Button>
@@ -151,8 +125,8 @@ export default function TravelPage() {
 
       <h1 className="text-4xl font-bold mb-6">🌍 Guptaji AI Planner</h1>
 
+      {/* Input Form */}
       <div className="w-full max-w-2xl space-y-4 relative">
-        {/* Destination Input with Suggestions */}
         <Input
           placeholder="Destination (e.g., Paris)"
           value={destination}
@@ -172,18 +146,12 @@ export default function TravelPage() {
           </div>
         )}
 
-        {/* Days Selection */}
         <div className="flex gap-2 items-center">
           <label className="text-gray-400 w-28">Days</label>
-          <Input
-            type="number"
-            min="1"
-            value={days}
-            onChange={(e) => setDays(e.target.value)}
-          />
+          <Input type="number" min="1" value={days} onChange={(e) => setDays(e.target.value)} />
         </div>
 
-        {/* Traveler Type */}
+        {/* Traveler */}
         <div>
           <p className="text-gray-400 mb-2">Who’s traveling?</p>
           <div className="grid grid-cols-2 gap-2">
@@ -207,7 +175,7 @@ export default function TravelPage() {
           </div>
         </div>
 
-        {/* Budget Options */}
+        {/* Budget */}
         <div>
           <p className="text-gray-400 mb-2">Budget</p>
           <div className="grid grid-cols-3 gap-2">
@@ -228,9 +196,8 @@ export default function TravelPage() {
           </div>
         </div>
 
-        {/* Interests */}
         <Textarea
-          placeholder="Interests (e.g., museums, food, adventure)"
+          placeholder="Interests (e.g., museums, food)"
           value={interests}
           onChange={(e) => setInterests(e.target.value)}
         />
@@ -244,25 +211,21 @@ export default function TravelPage() {
         </Button>
       </div>
 
-      {/* Place Info */}
+      {/* Place Info (with images) */}
       {place && (
         <div className="mt-6 w-full max-w-2xl bg-gray-900 p-6 rounded-lg shadow-lg">
           <h2 className="text-xl font-bold mb-3">{place.name}</h2>
           <p className="text-gray-400">📍 Lat: {place.lat}, Lon: {place.lon}</p>
           <div className="grid grid-cols-3 gap-3 mt-4">
-            {place.images.map((img: any, i: number) => (
-              <img
-                key={i}
-                src={img.url}
-                alt={img.alt || "Place Image"}
-                className="rounded-lg w-full h-32 object-cover"
-              />
-            ))}
+            {place.images.map(
+              (img: any, i: number) =>
+                img.url && <img key={i} src={img.url} alt={img.alt || "Place Image"} className="rounded-lg w-full h-32 object-cover" />
+            )}
           </div>
         </div>
       )}
 
-      {/* AI Travel Plan */}
+      {/* AI Travel Plan (no spot images) */}
       {plan && !plan.error && (
         <div className="mt-8 w-full max-w-3xl space-y-6">
           {plan.days?.map((day: any, i: number) => (
@@ -272,15 +235,7 @@ export default function TravelPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {day.itinerary.map((spot: any, j: number) => (
-                  <div
-                    key={j}
-                    className="p-3 rounded-lg bg-gray-800 flex gap-4"
-                  >
-                    <img
-                      src={spot.image}
-                      alt={spot.name}
-                      className="w-28 h-20 rounded-lg object-cover"
-                    />
+                  <div key={j} className="p-3 rounded-lg bg-gray-800 flex gap-4">
                     <div>
                       <h3 className="font-bold">{spot.name}</h3>
                       <p className="text-sm text-gray-400">{spot.description}</p>
@@ -294,7 +249,6 @@ export default function TravelPage() {
             </Card>
           ))}
 
-          {/* ✅ Save Trip Button */}
           <Button
             onClick={handleSaveTrip}
             disabled={saving || saved}
@@ -305,9 +259,7 @@ export default function TravelPage() {
         </div>
       )}
 
-      {plan?.error && (
-        <p className="text-red-400 mt-6">{plan.error}</p>
-      )}
+      {plan?.error && <p className="text-red-400 mt-6">{plan.error}</p>}
     </div>
   );
 }

@@ -27,24 +27,28 @@ export async function POST(req: Request) {
 
     const place = osmRes.data[0];
 
-    // 🔹 Step 2: Fetch images from Unsplash
+    // 🔹 Step 2: Fetch images from Unsplash (if API key exists)
     let images: { url: string; alt: string }[] = [];
 
     if (UNSPLASH_ACCESS_KEY) {
-      const unsplashRes = await axios.get("https://api.unsplash.com/search/photos", {
-        params: {
-          query,
-          per_page: 3,
-        },
-        headers: {
-          Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}`,
-        },
-      });
+      try {
+        const unsplashRes = await axios.get("https://api.unsplash.com/search/photos", {
+          params: {
+            query,
+            per_page: 3,
+          },
+          headers: {
+            Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}`,
+          },
+        });
 
-      images = unsplashRes.data.results.map((img: any) => ({
-        url: img.urls?.regular || "",
-        alt: img.alt_description || "Travel Image",
-      }));
+        images = (unsplashRes.data.results || []).map((img: any) => ({
+          url: img.urls?.regular || "",
+          alt: img.alt_description || "Travel Image",
+        })).filter((img: { url: any; }) => img.url); // filter out empty URLs
+      } catch (err) {
+        console.error("Unsplash API error:", err);
+      }
     }
 
     return NextResponse.json({
