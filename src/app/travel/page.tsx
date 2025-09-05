@@ -76,22 +76,23 @@ export default function TravelPage() {
       let aiPlan = res.data.plan;
 
     // Loop over each day and fetch images for each itinerary spot
-for (let day of aiPlan.days) {
-  const updatedItinerary = await Promise.all(
-    day.itinerary.map(async (spot: any) => {
-      try {
-        const imgRes = await axios.post("/api/place", { query: spot.name });
-        const imageUrl = imgRes.data?.images?.[0]?.url || "";
-        return { ...spot, image: imageUrl };
-      } catch (err) {
-        console.error(`Failed to fetch image for ${spot.name}:`, err);
-        return { ...spot, image: "" }; // fallback if fetch fails
+  for (let day of aiPlan.days) {
+        await Promise.all(
+          day.itinerary.map(async (spot: any) => {
+            try {
+              const imgRes = await axios.post("/api/place", { query: spot.name });
+              if (imgRes.data?.images?.length > 0) {
+                spot.image = imgRes.data.images[0].url;
+              }
+            } catch (err) {
+              console.error("Unsplash fetch failed:", err);
+            }
+          })
+        );
       }
-    })
-  );
 
-  day.itinerary = updatedItinerary;
-}
+
+
 
       setPlan(aiPlan);
     } catch (error) {
