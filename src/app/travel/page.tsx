@@ -22,16 +22,15 @@ export default function TravelPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Fetch suggestions from OpenStreetMap
+  // 🔹 Fetch suggestions from OpenStreetMap
   const fetchSuggestions = async (value: string) => {
     setDestination(value);
     if (value.length < 3) return setSuggestions([]);
     try {
-      const res = await axios.get(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          value
-        )}&limit=5`
-      );
+      const res = await axios.get("https://nominatim.openstreetmap.org/search", {
+        params: { format: "json", q: value, limit: 5 },
+        headers: { "User-Agent": "guptaji-ai-planner" },
+      });
       setSuggestions(res.data);
     } catch (err) {
       console.error("Error fetching suggestions:", err);
@@ -43,7 +42,7 @@ export default function TravelPage() {
     setSuggestions([]);
   };
 
-  // Generate AI travel plan
+  // 🔹 Generate AI travel plan
   const handleGenerate = async () => {
     setLoading(true);
     setPlan(null);
@@ -59,22 +58,28 @@ export default function TravelPage() {
       const res = await axios.post("/api/ai-planer", {
         destination,
         totalDays: days,
-        traveler: traveler.people,
-        budget: budget.title,
+        traveler: traveler.title,
+        budget: budget.title, // ✅ use .title, not object
         interests,
       });
 
       const aiPlan = res.data.plan;
 
-      // Remove spot images, only keep info
-      aiPlan.days.forEach((day: any) => {
-        day.itinerary = day.itinerary.map((spot: any) => ({
-          name: spot.name,
-          description: spot.description,
-          time: spot.time,
-          price: spot.price,
-        }));
-      });
+      // ✅ Attach Unsplash images to each spot
+      for (let day of aiPlan.days) {
+        await Promise.all(
+          day.itinerary.map(async (spot: any) => {
+            try {
+              const imgRes = await axios.post("/api/place", { query: spot.name });
+              if (imgRes.data?.images?.length > 0) {
+                spot.image = imgRes.data.images[0].url;
+              }
+            } catch {
+              spot.image = null;
+            }
+          })
+        );
+      }
 
       setPlan(aiPlan);
     } catch (err) {
@@ -85,7 +90,7 @@ export default function TravelPage() {
     }
   };
 
-  // Save trip
+  // 🔹 Save trip
   const handleSaveTrip = async () => {
     if (!plan) {
       alert("⚠️ No travel plan generated to save.");
@@ -96,7 +101,7 @@ export default function TravelPage() {
       await axios.post("/api/users/trips", {
         destination,
         days: Number(days),
-        traveler: traveler.people,
+        traveler: traveler.title,
         budget: budget.title,
         interests,
         plan,
@@ -219,13 +224,20 @@ export default function TravelPage() {
           <div className="grid grid-cols-3 gap-3 mt-4">
             {place.images.map(
               (img: any, i: number) =>
-                img.url && <img key={i} src={img.url} alt={img.alt || "Place Image"} className="rounded-lg w-full h-32 object-cover" />
+                img.url && (
+                  <img
+                    key={i}
+                    src={img.url}
+                    alt={img.alt || "Place Image"}
+                    className="rounded-lg w-full h-32 object-cover"
+                  />
+                )
             )}
           </div>
         </div>
       )}
 
-      {/* AI Travel Plan (no spot images) */}
+      {/* AI Travel Plan */}
       {plan && !plan.error && (
         <div className="mt-8 w-full max-w-3xl space-y-6">
           {plan.days?.map((day: any, i: number) => (
@@ -236,6 +248,13 @@ export default function TravelPage() {
               <CardContent className="space-y-3">
                 {day.itinerary.map((spot: any, j: number) => (
                   <div key={j} className="p-3 rounded-lg bg-gray-800 flex gap-4">
+                    {spot.image && (
+                      <img
+                        src={spot.image}
+                        alt={spot.name}
+                        className="w-28 h-20 rounded-lg object-cover"
+                      />
+                    )}
                     <div>
                       <h3 className="font-bold">{spot.name}</h3>
                       <p className="text-sm text-gray-400">{spot.description}</p>
